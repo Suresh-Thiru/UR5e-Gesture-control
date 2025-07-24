@@ -1,0 +1,140 @@
+import cv2
+import mediapipe as mp
+import socket
+import time
+
+UR_IP = "192.168.1.13"
+UR_PORT = 30002
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((UR_IP, UR_PORT))
+print("Connected to UR5e")
+
+def send(script):
+    s.send(f"stopl(0.2)\n".encode())
+    s.send((script + "\n").encode())
+    #s.send(f"stop(0.2)\n".encode())
+
+def go_home():
+    home = f"movel(p[0.13385, -0.48665, 0.50415, 0, -3.14, 0], a=0.1, v=0.2)"
+    print("Moving robot to home")
+    time.sleep(1)
+    send(home)
+
+def move_up():
+    script = f"speedl([0,0,0.1,0,0,0],0.02)"
+	print("moving Robot Up..........")
+    time.sleep(1)
+    send(script)
+
+def move_down():
+    script = f"speedl([0,0,-0.1,0,0,0],0.02)"
+    print("moving Robot down")
+    time.sleep(1)
+    send(script)
+
+def move_left():
+    script = f"speedl([-0.1,0,0,0,0,0],0.02)"
+    print("Moving Robot left.........")
+    time.sleep(1)
+    send(script)
+
+def move_right():
+    script = f"speedl([0.1,0,0,0,0,0],0.02)"
+    print("Moving robot right")
+    time.sleep(1)
+    send(script)
+
+# MediaPipe Setup
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
+mp_draw = mp.solutions.drawing_utils
+cap = cv2.VideoCapture(0)
+
+FINGER_TIPS = [4, 8, 12]
+
+def interpret_gesture(landmarks):
+    thumb = landmarks.landmark[4].y < landmarks.landmark[2].y
+    index = landmarks.landmark[8].y < landmarks.landmark[6].y
+    middle = landmarks.landmark[12].y < landmarks.landmark[10].y
+
+    x_diff = landmarks.landmark[8].x - landmarks.landmark[5].x
+    y_diff = abs(landmarks.landmark[8].y - landmarks.landmark[5].y)
+
+    horizontal_threshold = 0.09
+
+    if thumb and not index and not middle:
+        return "home"
+    elif index and not middle and y_diff > horizontal_threshold:
+        return "up"
+    elif index and middle and y_diff > horizontal_threshold:
+        return "down"
+    elif index and not middle and y_diff <= horizontal_threshold:
+        if x_diff > 0.02:
+            return "right"
+    elif index and middle and y_diff <= horizontal_threshold:
+        if x_diff > 0.02:
+            return "left"
+
+    return None
+
+try:
+    print("Moving to home...")
+    go_home()
+    last_command = None
+
+    time.sleep(2)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(rgb)
+
+        command = None
+
+        if results.multi_hand_landmarks:
+            for handLms in results.multi_hand_landmarks:
+                mp_draw.draw_landmarks(frame, handLms, mp_hands.HAND_CONNECTIONS)
+                command = interpret_gesture(handLms)
+
+        if command != last_command:
+            print(f"Gesture → {command}")
+            last_command = command
+
+            if command == "home":
+                send("stopl(0.5)")
+                go_home()
+                time.sleep(1)
+            elif command == "up":
+                send("stopl(0.5)")
+                move_up()
+                time.sleep(1)
+            elif command == "down":
+                send("stopl(0.5)")
+                move_down()
+                time.sleep(1)
+            elif command == "left":
+                send("stopl(0.5)")
+                move_left()
+                time.sleep(1)
+            elif command == "right":
+                send("stopl(0.5)")
+                move_right()
+                time.sleep(1)
+
+        cv2.putText(frame, f"Command: {command}", (10, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.imshow("Gesture UR Control", frame)
+
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+
+finally:
+    cap.release()
+    cv2.destroyAllWindows()
+    s.close()
+    print("Disconnected from robot.")
