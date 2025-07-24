@@ -3,6 +3,7 @@ Controlling of UR5e Robot with Gesture control using Mediapipe
 
 “Wave It, Move It!” ✋🤖
 
+Youtube Link: https://youtu.be/HPGEiMZfP5M
 
 
 Another Weekend Wrap: I built a foundational-level gesture‑controlled UR5e demo using MediaPipe and Python, laying the groundwork for more advanced AI and machine‑vision integrations.
